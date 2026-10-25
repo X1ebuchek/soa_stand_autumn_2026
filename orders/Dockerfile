@@ -1,11 +1,13 @@
-FROM golang:1.26-alpine AS build
+FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
-COPY *.go ./
-RUN CGO_ENABLED=0 go build -trimpath -o /out/orders .
+COPY pom.xml ./
+RUN mvn -q -B -DskipTests dependency:resolve
+COPY src ./src
+RUN mvn -q -B -DskipTests package
 
-FROM gcr.io/distroless/static-debian12:nonroot
-COPY --from=build /out/orders /orders
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+COPY --from=build /src/target/orders.jar /app/orders.jar
+COPY --from=build /src/target/lib /app/lib
 EXPOSE 8080
-ENTRYPOINT ["/orders"]
+ENTRYPOINT ["java","-Xms64m","-Xmx512m","-XX:+ExitOnOutOfMemoryError","-cp","/app/orders.jar:/app/lib/*","orders.Main"]
